@@ -92,6 +92,11 @@ class Audit extends Module
     public $accessUsers = null;
 
     /**
+     * @var callback Callback function that checks whether the user is allowed to access the viewer.
+     */
+    public $accessCallback = null;
+
+    /**
      * @var bool Compress extra data generated or just keep in text? For people who don't like binary data in the DB
      */
     public $compressData = true;

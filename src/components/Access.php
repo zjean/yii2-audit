@@ -76,6 +76,9 @@ class Access extends Component
         if (self::checkAccessUsers($audit->accessUsers)) {
             return true;
         }
+        if (self::checkAccessCallback($audit->accessCallback)) {
+            return true;
+        }
         return false;
     }
 
@@ -129,6 +132,19 @@ class Access extends Component
             if (in_array(Yii::$app->request->getUserIP(), $ips)) {
                 return true;
             }
+        }
+        return false;
+    }
+
+    /**
+     * @param array $ips
+     * @return bool
+     */
+    private static function checkAccessCallback($callback)
+    {
+        if (!empty($callback) && is_callable($callback)) {
+            
+            return call_user_func($callback, Yii::$app->user);
         }
         return false;
     }
