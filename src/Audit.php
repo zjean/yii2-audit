@@ -225,12 +225,7 @@ class Audit extends Module
         // After request finalizes the audit entry.
         $app->on(Application::EVENT_AFTER_REQUEST, [$this, 'onAfterRequest']);
 
-        // Activate the logging target
-        if (empty($app->getLog()->targets['audit'])) {
-            $this->logTarget = $app->getLog()->targets['audit'] = new LogTarget($this, $this->logConfig);
-        } else {
-            $this->logTarget = $app->getLog()->targets['audit'];
-        }
+        $this->activateLogTarget();
 
         // Boot all active panels
         $this->normalizePanelConfiguration();
@@ -297,6 +292,18 @@ class Audit extends Module
         return call_user_func_array($this->_panelFunctions[$name], $params);
     }
 
+    public function activateLogTarget()
+    {
+        $app = Yii::$app;
+
+        // Activate the logging target
+        if (empty($app->getLog()->targets['audit'])) {
+            $this->logTarget = $app->getLog()->targets['audit'] = new LogTarget($this, $this->logConfig);
+        } else {
+            $this->logTarget = $app->getLog()->targets['audit'];
+        }
+    }
+
     /**
      * @return \yii\db\Connection the database connection.
      */
@@ -322,6 +329,14 @@ class Audit extends Module
         return $this->_entry;
     }
 
+    /**
+     * @param AuditEntry $entry
+     */
+    public function setEntry($entry)
+    {
+        $this->_entry = $entry;
+    }
+    
     /**
      * @param $user_id
      * @return string
