@@ -8,6 +8,8 @@ use bedezign\yii2\audit\components\Helper;
 use Yii;
 use yii\db\ActiveQuery;
 use yii\db\Expression;
+use yii\helpers\ArrayHelper;
+use yii\helpers\Url;
 
 /**
  * AuditEntry
@@ -228,6 +230,20 @@ class AuditEntry extends ActiveRecord
             return current(array_values(array_filter(explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']))));
         }
         return isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : null;
+    }
+
+    /**
+     * @return string
+     */
+    public function getRequestUrl()
+    {
+        $data = ArrayHelper::getColumn($this->data, 'data');
+        if (!isset($data['audit/request']) || !is_array($data['audit/request'])) {
+            return Url::to([$this->route ?: '/'], 'https');
+        }
+        $request = $data['audit/request'];
+        $route = $this->route ?: (!empty($request['route']) ? $request['route'] : '/');
+        return Url::to(ArrayHelper::merge([$route], $request['GET']), 'https');
     }
 
 }

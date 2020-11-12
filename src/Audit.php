@@ -70,6 +70,16 @@ class Audit extends Module
     public $ignoreActions = [];
 
     /**
+     * @var string[] Action or list of actions to track if they cause an error. '*' is allowed as the first or last character to use as wildcard.
+     */
+    public $trackErrorActions = ['*'];
+
+    /**
+     * @var string[] Action or list of actions to ignore if they cause an error. '*' is allowed as the first or last character to use as wildcard (eg 'debug/*').
+     */
+    public $ignoreErrorActions = [];
+
+    /**
      * @var int Maximum age (in days) of the audit entries before they are truncated
      */
     public $maxAge = null;
@@ -135,7 +145,7 @@ class Audit extends Module
      * It is important that the key is unique, as this is the identifier used to store any data associated with the panel.
      *
      * Please note:
-     * - If you just want to change the configuration for a core panel, use the `$panelConfiguration`, it will be merged into this one
+     * - If you just want to change the configuration for a core panel, use `$panelsMerge`, it will be merged into this one
      * - If you add custom panels, please namespace them ("mynamespace/panelname").
      */
     public $panels = [
@@ -157,7 +167,7 @@ class Audit extends Module
 
     /**
      * Everything you add in here will be merged with the basic panel configuration.
-     * This gives you an easy way to just add or modify panels/configurations without having to re-specify every panel.
+     * This gives you an easy way to just add or modify panels/configurations without having to re-specify all active panels.
      * This only accepts regular definitions ('<key>' => '<array>'), but the core class will be added if needed
      * Take a look at the [module configuration](docs/module-configuration.md) for more information.
      */
@@ -168,10 +178,11 @@ class Audit extends Module
      */
     public $logTarget;
 
-    /**
-     * @see \yii\debug\Module::$traceLine
-     */
+    // Things required to keep the module yii2-debug compatible
+    /* @see \yii\debug\Module::$traceLine (since 2.0.7) */
     public $traceLine = \yii\debug\Module::DEFAULT_IDE_TRACELINE;
+     /* @see \yii\debug\Module::$tracePathMappings (since 2.1.6) */
+    public $tracePathMappings = [];
 
     /**
      * @var array
@@ -205,6 +216,8 @@ class Audit extends Module
      */
     private $_entry = null;
 
+    private static $_me = null;
+
     /**
      * @throws InvalidConfigException
      */
@@ -232,18 +245,31 @@ class Audit extends Module
         $this->panels = $this->loadPanels(array_keys($this->panels));
     }
 
+    public function shouldTrack($event, $isError = false)
+    {
+        $trackActions = $isError ? $this->trackErrorActions : $this->trackActions;
+        $ignoreActions = $isError ? $this->ignoreErrorActions : $this->ignoreActions;
+
+        if (!empty($trackActions) && !$this->routeMatches($event->action->uniqueId, $trackActions)) {
+            return false;
+        }
+        if (!empty($ignoreActions) && $this->routeMatches($event->action->uniqueId, $ignoreActions)) {
+            return false;
+        }
+
+        return true;
+    }
+
     /**
      * Called to evaluate if the current request should be logged
      * @param ActionEvent $event
      */
     public function onBeforeAction($event)
     {
-        if (!empty($this->trackActions) && !$this->routeMatches($event->action->uniqueId, $this->trackActions)) {
+        if (!$this->shouldTrack($event)) {
             return;
         }
-        if (!empty($this->ignoreActions) && $this->routeMatches($event->action->uniqueId, $this->ignoreActions)) {
-            return;
-        }
+
         // Still here, start audit
         $this->getEntry(true);
     }
@@ -269,6 +295,14 @@ class Audit extends Module
             throw new InvalidParamException("The '$name'-function has already been defined.");
 
         $this->_panelFunctions[$name] = $callback;
+    }
+
+    public function hasMethod($name, $checkBehaviors = true)
+    {
+        if (isset($this->_panelFunctions[$name])) {
+            return true;
+        }
+        return parent::hasMethod($name, $checkBehaviors);
     }
 
     /**
@@ -312,6 +346,25 @@ class Audit extends Module
         return Yii::$app->{$this->db};
     }
 
+    public static function getInstance()
+    {
+        if (static::$_me) {
+            return self::$_me;
+        }
+
+        // This code assumes the audit module is already loaded and can thus look for a derived instance
+        $loadedModules = Yii::$app->loadedModules;
+        foreach ($loadedModules as $module) {
+             if ($module instanceof self) {
+                 return self::$_me = $module;
+             }
+        }
+
+        // If we're still here, fall back onto the default implementation
+        return parent::getInstance();
+    }
+
+
     /**
      * @param bool $create
      * @param bool $new
@@ -336,7 +389,7 @@ class Audit extends Module
     {
         $this->_entry = $entry;
     }
-    
+
     /**
      * @param $user_id
      * @return string
